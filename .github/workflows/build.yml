@@ -28,7 +28,11 @@ jobs:
       - name: パッケージ
         run: |
           export DEBIAN_FRONTEND=noninteractive
-          apt-get update
+          # bullseye はサポートが終わり archive.debian.org へ移った
+          echo 'deb http://archive.debian.org/debian bullseye main' > /etc/apt/sources.list
+          echo 'deb http://archive.debian.org/debian-security bullseye-security main' >> /etc/apt/sources.list
+          rm -f /etc/apt/sources.list.d/*
+          apt-get -o Acquire::Check-Valid-Until=false update
           apt-get install -y --no-install-recommends gcc g++ git autoconf2.13 perl make \
             python3 python3-distutils unzip zip xz-utils curl ca-certificates ccache uuid-runtime
           df -h / /__w || true; nproc; free -g
