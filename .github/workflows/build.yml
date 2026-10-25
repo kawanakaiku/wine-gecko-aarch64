@@ -35,7 +35,7 @@ jobs:
           apt-get -o Acquire::Check-Valid-Until=false update
           apt-get install -y --no-install-recommends gcc g++ git autoconf2.13 perl make \
             python3 python3-distutils unzip zip xz-utils curl ca-certificates ccache uuid-runtime
-          df -h / /__w || true; nproc; free -g
+          df -h / /__w || true; nproc
 
       - uses: actions/checkout@v4
         with:

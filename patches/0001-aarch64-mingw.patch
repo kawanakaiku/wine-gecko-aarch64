@@ -12,7 +12,7 @@ index 093eb89f5..df73e76cc 100644
          DEFINES['_X86_'] = True
  else:
 diff --git a/gfx/angle/src/common/mathutil.h b/gfx/angle/src/common/mathutil.h
-index 7aff8aa56..91ab994f7 100644
+index 7aff8aa56..3af9c4b40 100644
 --- a/gfx/angle/src/common/mathutil.h
 +++ b/gfx/angle/src/common/mathutil.h
 @@ -127,7 +127,7 @@ inline unsigned int unorm(float x)
@@ -20,15 +20,25 @@ index 7aff8aa56..91ab994f7 100644
  inline bool supportsSSE2()
  {
 -#if defined(ANGLE_PLATFORM_WINDOWS) && !defined(_M_ARM)
-+#if defined(ANGLE_PLATFORM_WINDOWS) && !defined(_M_ARM) && !defined(_M_ARM64)
++#if defined(ANGLE_PLATFORM_WINDOWS) && !defined(_M_ARM) && !defined(__aarch64__)
      static bool checked = false;
      static bool supports = false;
  
 diff --git a/ipc/chromium/src/base/atomicops.h b/ipc/chromium/src/base/atomicops.h
-index 714e08928..4ef9e0b6b 100644
+index 714e08928..c18d8cdb6 100644
 --- a/ipc/chromium/src/base/atomicops.h
 +++ b/ipc/chromium/src/base/atomicops.h
-@@ -132,7 +132,7 @@ Atomic64 Release_Load(volatile const Atomic64* ptr);
+@@ -96,6 +96,9 @@ Atomic32 Release_CompareAndSwap(volatile Atomic32* ptr,
+                                 Atomic32 old_value,
+                                 Atomic32 new_value);
+ 
++#if defined(OS_WIN) && defined(ARCH_CPU_ARM64)
++#undef MemoryBarrier
++#endif
+ void MemoryBarrier();
+ void NoBarrier_Store(volatile Atomic32* ptr, Atomic32 value);
+ void Acquire_Store(volatile Atomic32* ptr, Atomic32 value);
+@@ -132,7 +135,7 @@ Atomic64 Release_Load(volatile const Atomic64* ptr);
  }  // namespace base
  
  // Include our platform specific implementation.
@@ -60,14 +70,14 @@ index 5c03346df..3e7f56da9 100644
  inline Atomic32 Acquire_CompareAndSwap(volatile Atomic32* ptr,
                                         Atomic32 old_value,
 diff --git a/ipc/chromium/src/base/cpu.cc b/ipc/chromium/src/base/cpu.cc
-index 0fef897ae..72c6b3979 100644
+index 0fef897ae..d73b52a22 100644
 --- a/ipc/chromium/src/base/cpu.cc
 +++ b/ipc/chromium/src/base/cpu.cc
 @@ -31,6 +31,7 @@ void CPU::Initialize() {
    //
    // More info can be found here:
    // http://msdn.microsoft.com/en-us/library/hskdteyh.aspx
-+#if !defined(_M_ARM64)
++#if !defined(__aarch64__)
    __cpuid(cpu_info, 0);
    int num_ids = cpu_info[0];
    memset(cpu_string, 0, sizeof(cpu_string));
@@ -106,7 +116,7 @@ index 90feff10a..c4867e633 100644
  static uint32_t
  ntohl(uint32_t x)
 diff --git a/media/libvpx/vp8_rtcd.h b/media/libvpx/vp8_rtcd.h
-index faaf2ab18..cb81bc36f 100644
+index faaf2ab18..304d9a6a6 100644
 --- a/media/libvpx/vp8_rtcd.h
 +++ b/media/libvpx/vp8_rtcd.h
 @@ -6,7 +6,7 @@
@@ -114,7 +124,7 @@ index faaf2ab18..cb81bc36f 100644
   */
  
 -#if defined(_WIN64)
-+#if defined(_WIN64) && !defined(_M_ARM64)
++#if defined(_WIN64) && !defined(__aarch64__)
  /* 64 bit Windows */
  #ifdef _MSC_VER
  #include "vp8_rtcd_x86_64-win64-vs12.h"
@@ -123,12 +133,12 @@ index faaf2ab18..cb81bc36f 100644
  #endif
  
 -#elif defined(_WIN32)
-+#elif defined(_WIN32) && !defined(_M_ARM64)
++#elif defined(_WIN32) && !defined(__aarch64__)
  /* 32 bit Windows, MSVC. */
  #ifdef _MSC_VER
  #include "vp8_rtcd_x86-win32-vs12.h"
 diff --git a/media/libvpx/vp9_rtcd.h b/media/libvpx/vp9_rtcd.h
-index f3ec15b63..6b1086b3b 100644
+index f3ec15b63..80bc96f29 100644
 --- a/media/libvpx/vp9_rtcd.h
 +++ b/media/libvpx/vp9_rtcd.h
 @@ -6,7 +6,7 @@
@@ -136,7 +146,7 @@ index f3ec15b63..6b1086b3b 100644
   */
  
 -#if defined(_WIN64)
-+#if defined(_WIN64) && !defined(_M_ARM64)
++#if defined(_WIN64) && !defined(__aarch64__)
  /* 64 bit Windows */
  #ifdef _MSC_VER
  #include "vp9_rtcd_x86_64-win64-vs12.h"
@@ -145,12 +155,12 @@ index f3ec15b63..6b1086b3b 100644
  #endif
  
 -#elif defined(_WIN32)
-+#elif defined(_WIN32) && !defined(_M_ARM64)
++#elif defined(_WIN32) && !defined(__aarch64__)
  /* 32 bit Windows, MSVC. */
  #ifdef _MSC_VER
  #include "vp9_rtcd_x86-win32-vs12.h"
 diff --git a/media/libvpx/vpx_dsp_rtcd.h b/media/libvpx/vpx_dsp_rtcd.h
-index 616fe5f3d..39b773ffa 100644
+index 616fe5f3d..8440d55e4 100644
 --- a/media/libvpx/vpx_dsp_rtcd.h
 +++ b/media/libvpx/vpx_dsp_rtcd.h
 @@ -6,7 +6,7 @@
@@ -158,7 +168,7 @@ index 616fe5f3d..39b773ffa 100644
   */
  
 -#if defined(_WIN64)
-+#if defined(_WIN64) && !defined(_M_ARM64)
++#if defined(_WIN64) && !defined(__aarch64__)
  /* 64 bit Windows */
  #ifdef _MSC_VER
  #include "vpx_dsp_rtcd_x86_64-win64-vs12.h"
@@ -167,12 +177,12 @@ index 616fe5f3d..39b773ffa 100644
  #endif
  
 -#elif defined(_WIN32)
-+#elif defined(_WIN32) && !defined(_M_ARM64)
++#elif defined(_WIN32) && !defined(__aarch64__)
  /* 32 bit Windows, MSVC. */
  #ifdef _MSC_VER
  #include "vpx_dsp_rtcd_x86-win32-vs12.h"
 diff --git a/media/libvpx/vpx_scale_rtcd.h b/media/libvpx/vpx_scale_rtcd.h
-index 45b6a6490..379139c38 100644
+index 45b6a6490..65c7e3aee 100644
 --- a/media/libvpx/vpx_scale_rtcd.h
 +++ b/media/libvpx/vpx_scale_rtcd.h
 @@ -6,7 +6,7 @@
@@ -180,7 +190,7 @@ index 45b6a6490..379139c38 100644
   */
  
 -#if defined(_WIN64)
-+#if defined(_WIN64) && !defined(_M_ARM64)
++#if defined(_WIN64) && !defined(__aarch64__)
  /* 64 bit Windows */
  #ifdef _MSC_VER
  #include "vpx_scale_rtcd_x86_64-win64-vs12.h"
@@ -189,7 +199,7 @@ index 45b6a6490..379139c38 100644
  #endif
  
 -#elif defined(_WIN32)
-+#elif defined(_WIN32) && !defined(_M_ARM64)
++#elif defined(_WIN32) && !defined(__aarch64__)
  /* 32 bit Windows, MSVC. */
  #ifdef _MSC_VER
  #include "vpx_scale_rtcd_x86-win32-vs12.h"
