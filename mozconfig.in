@@ -5,7 +5,7 @@ mk_add_options MOZ_OBJDIR="@OBJDIR@"
 mk_add_options MOZ_MAKE_FLAGS="-j@JOBS@ -s"
 ac_add_options --disable-debug
 ac_add_options --enable-optimize
-ac_add_options --with-ccache
+# --with-ccache は config/external/nss で "multiple target patterns" になったので使わない
 
 # wine/mozconfig-common と同じ
 ac_add_options --enable-default-toolkit=cairo-windows
