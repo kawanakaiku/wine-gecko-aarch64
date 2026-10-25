@@ -1,0 +1,126 @@
+# Wine Gecko 2.47.4 を aarch64-w64-mingw32 向けに試しに作る。
+# ソースは WineHQ の GitLab から取得し、patches/ を当てる。秘密情報は使わない。
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      keep_going:
+        description: "make -k で失敗しても他を続ける (詰まり所を広く集める)"
+        type: boolean
+        default: true
+      make_minutes:
+        description: "make に使う最大の分数 (6 時間の制限より前に止めてログを残す)"
+        default: "300"
+
+env:
+  GECKO_TAG: wine-gecko-2.47.4
+  LLVM_MINGW: llvm-mingw-20220906-ucrt-ubuntu-18.04-x86_64
+  LLVM_MINGW_SHA256: ee00708bdd65eeaa88d5fa89ad7e3fa1d6bae8093ee4559748e431e55f7568ec
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    # 公式の CI (wine/gitlab/image.docker) と同じ Debian bullseye。python3.9 と autoconf2.13 が入る
+    container: debian:bullseye
+    steps:
+      - name: パッケージ
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends gcc g++ git autoconf2.13 perl make \
+            python3 python3-distutils unzip zip xz-utils curl ca-certificates ccache uuid-runtime
+          df -h / /__w || true; nproc; free -g
+
+      - uses: actions/checkout@v4
+        with:
+          path: ci
+
+      - name: llvm-mingw (公式と同じ LLVM 15 系)
+        run: |
+          curl -sfLO "https://github.com/mstorsjo/llvm-mingw/releases/download/20220906/$LLVM_MINGW.tar.xz"
+          echo "$LLVM_MINGW_SHA256  $LLVM_MINGW.tar.xz" | sha256sum -c
+          tar -C /opt -xJf "$LLVM_MINGW.tar.xz"
+          rm "$LLVM_MINGW.tar.xz"
+          echo "/opt/$LLVM_MINGW/bin" >> "$GITHUB_PATH"
+
+      - name: ソース
+        run: |
+          git init -q src
+          cd src
+          git remote add origin https://gitlab.winehq.org/wine/wine-gecko.git
+          git fetch -q --depth 1 origin "refs/tags/$GECKO_TAG:refs/tags/$GECKO_TAG"
+          git checkout -q "$GECKO_TAG"
+          git log -1 --format='%H %s'
+          for p in ../ci/patches/*.patch; do echo "== $p"; git apply --whitespace=nowarn "$p"; done
+          git diff --stat
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: ccache
+          key: ccache-${{ github.run_id }}
+          restore-keys: ccache-
+
+      - name: configure
+        run: |
+          export CCACHE_DIR="$PWD/ccache" CCACHE_MAXSIZE=4G
+          sed -e "s#@OBJDIR@#$PWD/obj#" -e "s#@JOBS@#$(nproc)#" ci/mozconfig.in > mozconfig
+          export MOZCONFIG="$PWD/mozconfig" SHELL=/bin/sh
+          cd src
+          ./mach configure 2>&1 | tee ../configure.log
+
+      - name: make
+        run: |
+          export CCACHE_DIR="$PWD/ccache" CCACHE_MAXSIZE=4G
+          export MOZCONFIG="$PWD/mozconfig" SHELL=/bin/sh
+          k=""; [ "${{ inputs.keep_going }}" = "true" ] && k="-k"
+          set +e
+          timeout "$(( ${{ inputs.make_minutes }} * 60 ))" make $k -j"$(nproc)" -C obj > build.log 2>&1
+          rc=$?
+          echo "make rc=$rc" | tee -a build.log
+          ccache -s || true
+          exit $rc
+
+      - name: 失敗の要約
+        if: always()
+        run: |
+          sh ci/summarize.sh build.log > errors-summary.txt || true
+          head -80 errors-summary.txt || true
+          tail -c 100000 build.log > build-tail.log || true
+          xz -T0 -k build.log || true
+
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ccache
+          key: ccache-${{ github.run_id }}
+
+      - name: 成功時の配布物 (make_package と同じ手順の前半)
+        if: success()
+        run: |
+          export MOZCONFIG="$PWD/mozconfig" SHELL=/bin/sh
+          make -C obj/browser/installer
+          v=$(head -n 1 src/wine/VERSION); d=wine-gecko-$v-aarch64
+          rm -rf "obj/dist/$d"; cp -r obj/dist/firefox "obj/dist/$d"
+          printf 'Wine Gecko %s' "$v" > "obj/dist/$d/VERSION"
+          while read -r f; do rm -f "obj/dist/$d/$f"; done < src/wine/remove-files.txt
+          tar -C obj/dist -cJf "$d.tar.xz" "$d"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs
+          path: |
+            configure.log
+            build.log.xz
+            build-tail.log
+            errors-summary.txt
+            obj/config.log
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: wine-gecko-aarch64
+          path: wine-gecko-*-aarch64.tar.xz
