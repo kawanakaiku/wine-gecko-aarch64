@@ -17,6 +17,8 @@ env:
   GECKO_TAG: wine-gecko-2.47.4
   LLVM_MINGW: llvm-mingw-20220906-ucrt-ubuntu-18.04-x86_64
   LLVM_MINGW_SHA256: ee00708bdd65eeaa88d5fa89ad7e3fa1d6bae8093ee4559748e431e55f7568ec
+  # mach の virtualenv に入る新しい setuptools の distutils 差し替えを止める
+  SETUPTOOLS_USE_DISTUTILS: stdlib
 
 jobs:
   build:
@@ -67,7 +69,9 @@ jobs:
           restore-keys: ccache-
 
       - name: configure
+        shell: bash
         run: |
+          set -o pipefail
           export CCACHE_DIR="$PWD/ccache" CCACHE_MAXSIZE=4G
           sed -e "s#@OBJDIR@#$PWD/obj#" -e "s#@JOBS@#$(nproc)#" ci/mozconfig.in > mozconfig
           export MOZCONFIG="$PWD/mozconfig" SHELL=/bin/sh
