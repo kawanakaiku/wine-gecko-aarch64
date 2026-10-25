@@ -39,6 +39,16 @@ jobs:
             python3 python3-distutils unzip zip xz-utils curl ca-certificates ccache uuid-runtime
           df -h / /__w || true; nproc
 
+      - name: GNU make 4.4.1 (bullseye の make 4.3 では config/external/nss で multiple target patterns になる)
+        run: |
+          curl -sfLO https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz
+          sha256sum make-4.4.1.tar.gz
+          echo "dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3  make-4.4.1.tar.gz" | sha256sum -c
+          tar xzf make-4.4.1.tar.gz
+          cd make-4.4.1 && ./configure -q --prefix=/usr/local --without-guile && make -s -j"$(nproc)" && make -s install
+          cd .. && rm -rf make-4.4.1*
+          hash -r; /usr/local/bin/make --version | head -1
+
       - uses: actions/checkout@v4
         with:
           path: ci
