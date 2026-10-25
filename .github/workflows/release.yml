@@ -32,8 +32,17 @@ jobs:
           for a in x86 x86_64; do
             curl -sfL --retry 5 -o "out/wine-gecko-$V-$a.tar.xz" "https://dl.winehq.org/wine/wine-gecko/$V/wine-gecko-$V-$a.tar.xz"
           done
-          cd out && ls -la && sha256sum *.tar.xz | tee ../sha256.txt
+          cd out
           for f in *.tar.xz; do xz -t "$f"; done
+          # Android では xz を展開できないので zip も作る (先頭は wine-gecko-$V-<arch>/)
+          for a in aarch64 x86 x86_64; do
+            d="wine-gecko-$V-$a"
+            tar -xJf "$d.tar.xz"
+            test -d "$d"
+            zip -q -r -9 -X "$d.zip" "$d"
+            rm -rf "./${d:?}"
+          done
+          ls -la && sha256sum *.tar.xz *.zip | tee ../sha256.txt
 
       - name: Release
         run: |
@@ -46,6 +55,7 @@ jobs:
             echo "  (コミット $src、ビルドは https://github.com/${{ github.repository }}/actions/runs/${{ inputs.run_id }})。"
             echo "  JIT なし (インタプリタのみ)、アクセシビリティ、js-ctypes、SPS プロファイラー、一部のメディアは無効。"
             echo "- \`wine-gecko-$V-x86.tar.xz\`, \`wine-gecko-$V-x86_64.tar.xz\`: https://dl.winehq.org/wine/wine-gecko/$V/ の公式の物の写し (変更なし)。"
+            echo "- \`*.zip\`: 各 tar.xz を展開して \`zip -r -9 -X\` でまとめ直したもの (中身は同じ、先頭は \`wine-gecko-$V-<arch>/\`)。"
             echo
             echo "ライセンス: Mozilla Public License 2.0 (https://www.mozilla.org/MPL/2.0/)。ソースは上の GitLab と patches/ から入手できます。"
             echo
@@ -54,4 +64,4 @@ jobs:
             cat sha256.txt
             echo '```'
           } > notes.md
-          gh release create "${{ inputs.tag }}" out/*.tar.xz --title "Wine Gecko $V (${{ inputs.tag }})" --notes-file notes.md
+          gh release create "${{ inputs.tag }}" out/*.tar.xz out/*.zip --draft --title "Wine Gecko $V (${{ inputs.tag }})" --notes-file notes.md
