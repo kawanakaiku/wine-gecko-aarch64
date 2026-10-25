@@ -60,6 +60,9 @@ jobs:
           tar -C /opt -xJf "$LLVM_MINGW.tar.xz"
           rm "$LLVM_MINGW.tar.xz"
           echo "/opt/$LLVM_MINGW/bin" >> "$GITHUB_PATH"
+          # aarch64 版の無い取り込みライブラリ (wintrust, rasdlg, rasapi32, esent) を作って足す
+          sh ci/mkimplibs.sh "/opt/$LLVM_MINGW" implibs
+          cp implibs/*.a "/opt/$LLVM_MINGW/aarch64-w64-mingw32/lib/"
 
       - name: ソース
         run: |
@@ -120,9 +123,9 @@ jobs:
           export MOZCONFIG="$PWD/mozconfig" SHELL=/bin/sh
           make -C obj/browser/installer
           v=$(head -n 1 src/wine/VERSION); d=wine-gecko-$v-aarch64
-          rm -rf "obj/dist/$d"; cp -r obj/dist/firefox "obj/dist/$d"
+          rm -rf "obj/dist/${d:?}"; cp -r obj/dist/firefox "obj/dist/$d"
           printf 'Wine Gecko %s' "$v" > "obj/dist/$d/VERSION"
-          while read -r f; do rm -f "obj/dist/$d/$f"; done < src/wine/remove-files.txt
+          while read -r f; do rm -f "obj/dist/${d:?}/${f:?}"; done < src/wine/remove-files.txt
           tar -C obj/dist -cJf "$d.tar.xz" "$d"
 
       - uses: actions/upload-artifact@v4

@@ -11,6 +11,44 @@ index 093eb89f5..df73e76cc 100644
      else:
          DEFINES['_X86_'] = True
  else:
+diff --git a/dom/base/nsDOMWindowUtils.cpp b/dom/base/nsDOMWindowUtils.cpp
+index 9bb8efd22..57428db54 100644
+--- a/dom/base/nsDOMWindowUtils.cpp
++++ b/dom/base/nsDOMWindowUtils.cpp
+@@ -2167,7 +2167,7 @@ nsDOMWindowUtils::GetSupportsHardwareH264Decoding(JS::MutableHandle<JS::Value> a
+   if (rv.Failed()) {
+     return rv.StealNSResult();
+   }
+-  promise.MaybeResolve(NS_LITERAL_STRING("No; Compiled without MP4 support."));
++  promise->MaybeResolve(NS_LITERAL_STRING("No; Compiled without MP4 support."));
+   aPromise.setObject(*promise->PromiseObj());
+ #endif
+   return NS_OK;
+diff --git a/gfx/2d/ExtendInputEffectD2D1.cpp b/gfx/2d/ExtendInputEffectD2D1.cpp
+index d48de53c3..f605eb9b4 100644
+--- a/gfx/2d/ExtendInputEffectD2D1.cpp
++++ b/gfx/2d/ExtendInputEffectD2D1.cpp
+@@ -5,6 +5,8 @@
+ 
+ #include "ExtendInputEffectD2D1.h"
+ 
++#include <float.h>
++
+ #include "Logging.h"
+ 
+ #include "ShadersD2D1.h"
+diff --git a/gfx/2d/ScaledFontWin.h b/gfx/2d/ScaledFontWin.h
+index d7c00695d..6b363f08f 100644
+--- a/gfx/2d/ScaledFontWin.h
++++ b/gfx/2d/ScaledFontWin.h
+@@ -7,6 +7,7 @@
+ #define MOZILLA_GFX_SCALEDFONTWIN_H_
+ 
+ #include "ScaledFontBase.h"
++#include <windows.h>
+ 
+ namespace mozilla {
+ namespace gfx {
 diff --git a/gfx/angle/src/common/mathutil.h b/gfx/angle/src/common/mathutil.h
 index 7aff8aa56..3af9c4b40 100644
 --- a/gfx/angle/src/common/mathutil.h
@@ -23,6 +61,19 @@ index 7aff8aa56..3af9c4b40 100644
 +#if defined(ANGLE_PLATFORM_WINDOWS) && !defined(_M_ARM) && !defined(__aarch64__)
      static bool checked = false;
      static bool supports = false;
+ 
+diff --git a/gfx/angle/src/common/platform.h b/gfx/angle/src/common/platform.h
+index 56db297b7..b3e8893ac 100644
+--- a/gfx/angle/src/common/platform.h
++++ b/gfx/angle/src/common/platform.h
+@@ -77,7 +77,7 @@
+ #   undef far
+ #endif
+ 
+-#if !defined(_M_ARM) && !defined(ANGLE_PLATFORM_ANDROID)
++#if !defined(_M_ARM) && !defined(__aarch64__) && !defined(ANGLE_PLATFORM_ANDROID)
+ #   define ANGLE_USE_SSE
+ #endif
  
 diff --git a/ipc/chromium/src/base/atomicops.h b/ipc/chromium/src/base/atomicops.h
 index 714e08928..c18d8cdb6 100644
@@ -89,6 +140,43 @@ index 0fef897ae..d73b52a22 100644
  }
  
  }  // namespace base
+diff --git a/ipc/chromium/src/base/process_util.h b/ipc/chromium/src/base/process_util.h
+index a8ce30437..6326766a8 100644
+--- a/ipc/chromium/src/base/process_util.h
++++ b/ipc/chromium/src/base/process_util.h
+@@ -72,7 +72,8 @@ enum ProcessArchitecture {
+   PROCESS_ARCH_X86_64 = 0x2,
+   PROCESS_ARCH_PPC = 0x4,
+   PROCESS_ARCH_ARM = 0x8,
+-  PROCESS_ARCH_MIPS = 0x10
++  PROCESS_ARCH_MIPS = 0x10,
++  PROCESS_ARCH_ARM64 = 0x20
+ };
+ 
+ inline ProcessArchitecture GetCurrentProcessArchitecture()
+@@ -88,6 +89,8 @@ inline ProcessArchitecture GetCurrentProcessArchitecture()
+   currentArchitecture = base::PROCESS_ARCH_ARM;
+ #elif defined(ARCH_CPU_MIPS)
+   currentArchitecture = base::PROCESS_ARCH_MIPS;
++#elif defined(ARCH_CPU_ARM64)
++  currentArchitecture = base::PROCESS_ARCH_ARM64;
+ #endif
+   return currentArchitecture;
+ }
+diff --git a/js/src/jit/ExecutableAllocatorWin.cpp b/js/src/jit/ExecutableAllocatorWin.cpp
+index 621929880..01c2ddcb9 100644
+--- a/js/src/jit/ExecutableAllocatorWin.cpp
++++ b/js/src/jit/ExecutableAllocatorWin.cpp
+@@ -63,6 +63,9 @@ ExecutableAllocator::computeRandomAllocationAddress()
+ #elif defined(JS_CPU_X86)
+     static const uintptr_t base = 0x04000000;
+     static const uintptr_t mask = 0x3fff0000;
++#elif defined(__aarch64__)
++    static const uintptr_t base = 0x0000000080000000;
++    static const uintptr_t mask = 0x000003ffffff0000;
+ #else
+ # error "Unsupported architecture"
+ #endif
 diff --git a/js/src/jscpucfg.h b/js/src/jscpucfg.h
 index a641e523b..041a1717b 100644
 --- a/js/src/jscpucfg.h
@@ -102,6 +190,45 @@ index a641e523b..041a1717b 100644
  #  define IS_LITTLE_ENDIAN 1
  #  undef  IS_BIG_ENDIAN
  # else  /* !(defined(_M_X64) || defined(_M_AMD64) || defined(_AMD64_)) */
+diff --git a/js/src/jsnativestack.cpp b/js/src/jsnativestack.cpp
+index 05928ea3d..8ad544529 100644
+--- a/js/src/jsnativestack.cpp
++++ b/js/src/jsnativestack.cpp
+@@ -47,7 +47,7 @@ js::GetNativeStackBaseImpl()
+     PNT_TIB64 pTib = reinterpret_cast<PNT_TIB64>(NtCurrentTeb());
+     return reinterpret_cast<void*>(pTib->StackBase);
+ 
+-# elif defined(_M_ARM)
++# elif defined(_M_ARM) || defined(_M_ARM64)
+     PNT_TIB pTib = reinterpret_cast<PNT_TIB>(NtCurrentTeb());
+     return static_cast<void*>(pTib->StackBase);
+ 
+diff --git a/js/src/jstypes.h b/js/src/jstypes.h
+index 914674abe..886a4bf6c 100644
+--- a/js/src/jstypes.h
++++ b/js/src/jstypes.h
+@@ -141,7 +141,7 @@
+ #elif defined(__GNUC__)
+ /* Additional GCC defines are when running on Solaris, AIX, and HPUX */
+ # if defined(__x86_64__) || defined(__sparcv9) || \
+-        defined(__64BIT__) || defined(__LP64__)
++        defined(__64BIT__) || defined(__LP64__) || defined(_WIN64)
+ #  define JS_64BIT
+ # endif
+ #elif defined(__SUNPRO_C) || defined(__SUNPRO_CC) /* Sun Studio C/C++ */
+diff --git a/js/src/vm/Time.h b/js/src/vm/Time.h
+index 36122b9fe..a6bc63396 100644
+--- a/js/src/vm/Time.h
++++ b/js/src/vm/Time.h
+@@ -125,7 +125,7 @@ PRMJ_FormatTime(char* buf, int buflen, const char* fmt, PRMJTime* tm);
+ 
+ #define MOZ_HAVE_RDTSC 1
+ 
+-#if defined(_WIN32)
++#if defined(_WIN32) && !defined(__aarch64__)
+ 
+ #include <intrin.h>
+ static __inline uint64_t
 diff --git a/media/libstagefright/ports/win32/include/netinet/in.h b/media/libstagefright/ports/win32/include/netinet/in.h
 index 90feff10a..c4867e633 100644
 --- a/media/libstagefright/ports/win32/include/netinet/in.h
@@ -293,6 +420,24 @@ index 8c747dc32..d9a348631 100644
  esac
  
  MOZ_ARG_ENABLE_BOOL(require-all-d3dc-versions,
+diff --git a/toolkit/library/libxul.mk b/toolkit/library/libxul.mk
+index cfb3c8ba0..0868362a4 100644
+--- a/toolkit/library/libxul.mk
++++ b/toolkit/library/libxul.mk
+@@ -55,7 +55,12 @@ endif
+ ifdef _MSC_VER
+ get_first_and_last = dumpbin -exports $1 | grep _NSModule@@ | sort -k 3 | sed -n 's/^.*?\([^@]*\)@@.*$$/\1/;1p;$$p'
+ else
+-get_first_and_last = $(TOOLCHAIN_PREFIX)nm -g $1 | grep _NSModule$$ | grep -vw refptr | sort | sed -n 's/^.* _*\([^ ]*\)$$/\1/;1p;$$p'
++ifeq ($(CPU_ARCH),aarch64)
++CHECK_NM = llvm-nm
++else
++CHECK_NM = $(TOOLCHAIN_PREFIX)nm
++endif
++get_first_and_last = $(CHECK_NM) -g $1 | grep _NSModule$$ | grep -vw refptr | sort | sed -n 's/^.* _*\([^ ]*\)$$/\1/;1p;$$p'
+ endif
+ 
+ ifeq ($(MOZ_PDB),)
 diff --git a/tools/profiler/public/PseudoStack.h b/tools/profiler/public/PseudoStack.h
 index 00ca9ce8c..0e786aff9 100644
 --- a/tools/profiler/public/PseudoStack.h
