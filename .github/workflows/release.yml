@@ -1,16 +1,16 @@
-# ビルドの成果物 (aarch64) と公式の x86 / x86_64 版の写しを Release に置く。
-# 公式の物は dl.winehq.org から取得する (MPL 2.0 で再配布できる)。
+# ビルドの成果物 (aarch64、arm64ec) と公式の x86 / x86_64 版の写しを Release に置く。
+# 公式の物は dl.winehq.org から取得する (MPL 2.0 で再配布できる)。説明は release-notes.md を元にする。
 name: release
 
 on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: "aarch64 版を作った build の実行の ID"
+        description: "aarch64 版と arm64ec 版を作った build の実行の ID"
         required: true
       tag:
         description: "リリースのタグ"
-        default: "gecko-2.47.4-1"
+        default: "gecko-2.47.4-2"
 
 permissions:
   contents: write
@@ -28,14 +28,16 @@ jobs:
       - name: 取得
         run: |
           mkdir out
-          gh run download "${{ inputs.run_id }}" -n wine-gecko-aarch64 -D out
+          for a in aarch64 arm64ec; do
+            gh run download "${{ inputs.run_id }}" -n "wine-gecko-$a" -D out
+          done
           for a in x86 x86_64; do
             curl -sfL --retry 5 -o "out/wine-gecko-$V-$a.tar.xz" "https://dl.winehq.org/wine/wine-gecko/$V/wine-gecko-$V-$a.tar.xz"
           done
           cd out
           for f in *.tar.xz; do xz -t "$f"; done
           # Android では xz を展開できないので zip も作る (先頭は wine-gecko-$V-<arch>/)
-          for a in aarch64 x86 x86_64; do
+          for a in aarch64 arm64ec x86 x86_64; do
             d="wine-gecko-$V-$a"
             tar -xJf "$d.tar.xz"
             test -d "$d"
@@ -44,24 +46,15 @@ jobs:
           done
           ls -la && sha256sum *.tar.xz *.zip | tee ../sha256.txt
 
-      - name: Release
+      - name: Release (下書き)
         run: |
           src=$(git rev-parse HEAD)
+          sed -e "s#@COMMIT@#$src#g" -e "s#@RUN_URL@#https://github.com/${{ github.repository }}/actions/runs/${{ inputs.run_id }}#g" release-notes.md > notes.md
           {
-            echo "Wine Gecko $V の配布物。"
             echo
-            echo "- \`wine-gecko-$V-aarch64.tar.xz\`: aarch64 (ARM64 Windows、aarch64-w64-mingw32) 向けに作ったもの。"
-            echo "  元のソースは https://gitlab.winehq.org/wine/wine-gecko のタグ \`wine-gecko-$V\` に、このリポジトリの \`patches/\` を当てたもの"
-            echo "  (コミット $src、ビルドは https://github.com/${{ github.repository }}/actions/runs/${{ inputs.run_id }})。"
-            echo "  JIT なし (インタプリタのみ)、アクセシビリティ、js-ctypes、SPS プロファイラー、一部のメディアは無効。"
-            echo "- \`wine-gecko-$V-x86.tar.xz\`, \`wine-gecko-$V-x86_64.tar.xz\`: https://dl.winehq.org/wine/wine-gecko/$V/ の公式の物の写し (変更なし)。"
-            echo "- \`*.zip\`: 各 tar.xz を展開して \`zip -r -9 -X\` でまとめ直したもの (中身は同じ、先頭は \`wine-gecko-$V-<arch>/\`)。"
-            echo
-            echo "ライセンス: Mozilla Public License 2.0 (https://www.mozilla.org/MPL/2.0/)。ソースは上の GitLab と patches/ から入手できます。"
-            echo
-            echo "sha256:"
+            echo "## sha256"
             echo '```'
             cat sha256.txt
             echo '```'
-          } > notes.md
+          } >> notes.md
           gh release create "${{ inputs.tag }}" out/*.tar.xz out/*.zip --draft --title "Wine Gecko $V (${{ inputs.tag }})" --notes-file notes.md
