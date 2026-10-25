@@ -1,5 +1,5 @@
 diff --git a/config/external/nspr/pr/moz.build b/config/external/nspr/pr/moz.build
-index 093eb89f5..df73e76cc 100644
+index 093eb89f5..ebaaed9a6 100644
 --- a/config/external/nspr/pr/moz.build
 +++ b/config/external/nspr/pr/moz.build
 @@ -67,6 +67,8 @@ elif CONFIG['OS_TARGET'] == 'WINNT':
@@ -7,7 +7,7 @@ index 093eb89f5..df73e76cc 100644
      if CONFIG['CPU_ARCH'] == 'x86_64':
          DEFINES['_AMD64_'] = True
 +    elif CONFIG['CPU_ARCH'] == 'aarch64':
-+        DEFINES['_ARM64_'] = True
++        pass  # _ARM64_ は mingw のヘッダーが定義する (EC では定義してはいけない)
      else:
          DEFINES['_X86_'] = True
  else:
@@ -24,6 +24,36 @@ index 9bb8efd22..57428db54 100644
    aPromise.setObject(*promise->PromiseObj());
  #endif
    return NS_OK;
+diff --git a/dom/media/platforms/wmf/DXVA2Manager.cpp b/dom/media/platforms/wmf/DXVA2Manager.cpp
+index 2244d6a8f..38c5b5aaa 100644
+--- a/dom/media/platforms/wmf/DXVA2Manager.cpp
++++ b/dom/media/platforms/wmf/DXVA2Manager.cpp
+@@ -18,6 +18,8 @@
+ #include "DriverCrashGuard.h"
+ #include "nsPrintfCString.h"
+ 
++// 新しい mingw のヘッダーにも同じ名前がある
++#define CLSID_VideoProcessorMFT MOZ_CLSID_VideoProcessorMFT
+ const CLSID CLSID_VideoProcessorMFT =
+ {
+   0x88753b26,
+diff --git a/dom/system/OSFileConstants.cpp b/dom/system/OSFileConstants.cpp
+index 47904ca90..2dc7d4548 100644
+--- a/dom/system/OSFileConstants.cpp
++++ b/dom/system/OSFileConstants.cpp
+@@ -560,8 +560,12 @@ static const dom::ConstantSpec gLibcProperties[] =
+   INT_CONSTANT(S_IFDIR),
+   INT_CONSTANT(S_IFBLK),
+   INT_CONSTANT(S_IFREG),
++#if defined(S_IFLNK)
+   INT_CONSTANT(S_IFLNK),
++#endif
++#if defined(S_IFSOCK)
+   INT_CONSTANT(S_IFSOCK),
++#endif
+ #endif // defined(S_IFIFO)
+ 
+   INT_CONSTANT(PATH_MAX),
 diff --git a/gfx/2d/ExtendInputEffectD2D1.cpp b/gfx/2d/ExtendInputEffectD2D1.cpp
 index d48de53c3..f605eb9b4 100644
 --- a/gfx/2d/ExtendInputEffectD2D1.cpp
@@ -50,7 +80,7 @@ index d7c00695d..6b363f08f 100644
  namespace mozilla {
  namespace gfx {
 diff --git a/gfx/angle/src/common/mathutil.h b/gfx/angle/src/common/mathutil.h
-index 7aff8aa56..3af9c4b40 100644
+index 7aff8aa56..1cf84aeb9 100644
 --- a/gfx/angle/src/common/mathutil.h
 +++ b/gfx/angle/src/common/mathutil.h
 @@ -127,7 +127,7 @@ inline unsigned int unorm(float x)
@@ -58,12 +88,12 @@ index 7aff8aa56..3af9c4b40 100644
  inline bool supportsSSE2()
  {
 -#if defined(ANGLE_PLATFORM_WINDOWS) && !defined(_M_ARM)
-+#if defined(ANGLE_PLATFORM_WINDOWS) && !defined(_M_ARM) && !defined(__aarch64__)
++#if defined(ANGLE_PLATFORM_WINDOWS) && !defined(_M_ARM) && !defined(__aarch64__) && !defined(__arm64ec__)
      static bool checked = false;
      static bool supports = false;
  
 diff --git a/gfx/angle/src/common/platform.h b/gfx/angle/src/common/platform.h
-index 56db297b7..b3e8893ac 100644
+index 56db297b7..56f78a776 100644
 --- a/gfx/angle/src/common/platform.h
 +++ b/gfx/angle/src/common/platform.h
 @@ -77,7 +77,7 @@
@@ -71,19 +101,44 @@ index 56db297b7..b3e8893ac 100644
  #endif
  
 -#if !defined(_M_ARM) && !defined(ANGLE_PLATFORM_ANDROID)
-+#if !defined(_M_ARM) && !defined(__aarch64__) && !defined(ANGLE_PLATFORM_ANDROID)
++#if !defined(_M_ARM) && !defined(__aarch64__) && !defined(__arm64ec__) && !defined(ANGLE_PLATFORM_ANDROID)
  #   define ANGLE_USE_SSE
  #endif
  
+diff --git a/gfx/angle/src/libANGLE/BinaryStream.h b/gfx/angle/src/libANGLE/BinaryStream.h
+index 3e6ccc744..4f5b5ab30 100644
+--- a/gfx/angle/src/libANGLE/BinaryStream.h
++++ b/gfx/angle/src/libANGLE/BinaryStream.h
+@@ -13,6 +13,7 @@
+ #include "common/mathutil.h"
+ 
+ #include <cstddef>
++#include <type_traits>
+ #include <string>
+ #include <vector>
+ #include <stdint.h>
+diff --git a/gfx/qcms/transform.c b/gfx/qcms/transform.c
+index bafdcefcd..d1afb66a5 100644
+--- a/gfx/qcms/transform.c
++++ b/gfx/qcms/transform.c
+@@ -31,7 +31,7 @@
+ #include "transform_util.h"
+ 
+ /* for MSVC, GCC, Intel, and Sun compilers */
+-#if defined(_M_IX86) || defined(__i386__) || defined(__i386) || defined(_M_AMD64) || defined(__x86_64__) || defined(__x86_64)
++#if (defined(_M_IX86) || defined(__i386__) || defined(__i386) || defined(_M_AMD64) || defined(__x86_64__) || defined(__x86_64)) && !defined(__arm64ec__)
+ #define X86
+ #endif /* _M_IX86 || __i386__ || __i386 || _M_AMD64 || __x86_64__ || __x86_64 */
+ 
 diff --git a/ipc/chromium/src/base/atomicops.h b/ipc/chromium/src/base/atomicops.h
-index 714e08928..c18d8cdb6 100644
+index 714e08928..ac6e209d9 100644
 --- a/ipc/chromium/src/base/atomicops.h
 +++ b/ipc/chromium/src/base/atomicops.h
 @@ -96,6 +96,9 @@ Atomic32 Release_CompareAndSwap(volatile Atomic32* ptr,
                                  Atomic32 old_value,
                                  Atomic32 new_value);
  
-+#if defined(OS_WIN) && defined(ARCH_CPU_ARM64)
++#if defined(OS_WIN) && (defined(ARCH_CPU_ARM64) || defined(__arm64ec__))
 +#undef MemoryBarrier
 +#endif
  void MemoryBarrier();
@@ -99,14 +154,14 @@ index 714e08928..c18d8cdb6 100644
  #elif defined(OS_MACOSX) && defined(ARCH_CPU_X86_FAMILY)
  #include "base/atomicops_internals_x86_macosx.h"
 diff --git a/ipc/chromium/src/base/atomicops_internals_x86_msvc.h b/ipc/chromium/src/base/atomicops_internals_x86_msvc.h
-index 5c03346df..3e7f56da9 100644
+index 5c03346df..a4a4b35e8 100644
 --- a/ipc/chromium/src/base/atomicops_internals_x86_msvc.h
 +++ b/ipc/chromium/src/base/atomicops_internals_x86_msvc.h
 @@ -42,10 +42,17 @@ inline Atomic32 NoBarrier_AtomicIncrement(volatile Atomic32* ptr,
    return Barrier_AtomicIncrement(ptr, increment);
  }
  
-+#if defined(_M_ARM64) || defined(__aarch64__)
++#if defined(_M_ARM64) || defined(__aarch64__) || defined(__arm64ec__)
 +#undef MemoryBarrier
 +inline void MemoryBarrier() {
 +  __sync_synchronize();
@@ -121,14 +176,14 @@ index 5c03346df..3e7f56da9 100644
  inline Atomic32 Acquire_CompareAndSwap(volatile Atomic32* ptr,
                                         Atomic32 old_value,
 diff --git a/ipc/chromium/src/base/cpu.cc b/ipc/chromium/src/base/cpu.cc
-index 0fef897ae..d73b52a22 100644
+index 0fef897ae..515a605c3 100644
 --- a/ipc/chromium/src/base/cpu.cc
 +++ b/ipc/chromium/src/base/cpu.cc
 @@ -31,6 +31,7 @@ void CPU::Initialize() {
    //
    // More info can be found here:
    // http://msdn.microsoft.com/en-us/library/hskdteyh.aspx
-+#if !defined(__aarch64__)
++#if !defined(__aarch64__) && !defined(__arm64ec__)
    __cpuid(cpu_info, 0);
    int num_ids = cpu_info[0];
    memset(cpu_string, 0, sizeof(cpu_string));
@@ -164,14 +219,14 @@ index a8ce30437..6326766a8 100644
    return currentArchitecture;
  }
 diff --git a/js/src/jit/ExecutableAllocatorWin.cpp b/js/src/jit/ExecutableAllocatorWin.cpp
-index 621929880..01c2ddcb9 100644
+index 621929880..37176620f 100644
 --- a/js/src/jit/ExecutableAllocatorWin.cpp
 +++ b/js/src/jit/ExecutableAllocatorWin.cpp
 @@ -63,6 +63,9 @@ ExecutableAllocator::computeRandomAllocationAddress()
  #elif defined(JS_CPU_X86)
      static const uintptr_t base = 0x04000000;
      static const uintptr_t mask = 0x3fff0000;
-+#elif defined(__aarch64__)
++#elif defined(__aarch64__) || defined(__arm64ec__)
 +    static const uintptr_t base = 0x0000000080000000;
 +    static const uintptr_t mask = 0x000003ffffff0000;
  #else
@@ -217,7 +272,7 @@ index 914674abe..886a4bf6c 100644
  # endif
  #elif defined(__SUNPRO_C) || defined(__SUNPRO_CC) /* Sun Studio C/C++ */
 diff --git a/js/src/vm/Time.h b/js/src/vm/Time.h
-index 36122b9fe..a6bc63396 100644
+index 36122b9fe..60297f1bb 100644
 --- a/js/src/vm/Time.h
 +++ b/js/src/vm/Time.h
 @@ -125,7 +125,7 @@ PRMJ_FormatTime(char* buf, int buflen, const char* fmt, PRMJTime* tm);
@@ -225,10 +280,32 @@ index 36122b9fe..a6bc63396 100644
  #define MOZ_HAVE_RDTSC 1
  
 -#if defined(_WIN32)
-+#if defined(_WIN32) && !defined(__aarch64__)
++#if defined(_WIN32) && !defined(__aarch64__) && !defined(__arm64ec__)
  
  #include <intrin.h>
  static __inline uint64_t
+@@ -144,7 +144,7 @@ ReadTimestampCounter(void)
+     return x;
+ }
+ 
+-#elif defined(__x86_64__)
++#elif defined(__x86_64__) && !defined(__arm64ec__)
+ 
+ static __inline__ uint64_t
+ ReadTimestampCounter(void)
+diff --git a/media/libsoundtouch/src/STTypes.h b/media/libsoundtouch/src/STTypes.h
+index ddd56d808..eaaa5eab3 100644
+--- a/media/libsoundtouch/src/STTypes.h
++++ b/media/libsoundtouch/src/STTypes.h
+@@ -104,7 +104,7 @@ namespace soundtouch
+      
+     #endif
+ 
+-    #if (_M_IX86 || __i386__ || __x86_64__ || _M_X64)
++    #if (_M_IX86 || __i386__ || __x86_64__ || _M_X64) && !defined(__arm64ec__)
+         /// Define this to allow X86-specific assembler/intrinsic optimizations. 
+         /// Notice that library contains also usual C++ versions of each of these
+         /// these routines, so if you're having difficulties getting the optimized 
 diff --git a/media/libstagefright/ports/win32/include/netinet/in.h b/media/libstagefright/ports/win32/include/netinet/in.h
 index 90feff10a..c4867e633 100644
 --- a/media/libstagefright/ports/win32/include/netinet/in.h
@@ -242,8 +319,21 @@ index 90feff10a..c4867e633 100644
  
  static uint32_t
  ntohl(uint32_t x)
+diff --git a/media/libvorbis/lib/os.h b/media/libvorbis/lib/os.h
+index 8bc3e5fe9..00bea290c 100644
+--- a/media/libvorbis/lib/os.h
++++ b/media/libvorbis/lib/os.h
+@@ -148,7 +148,7 @@ static __inline void vorbis_fpu_restore(vorbis_fpu_control fpu){
+ 
+ /* Optimized code path for x86_64 builds. Uses SSE2 intrinsics. This can be
+    done safely because all x86_64 CPUs supports SSE2. */
+-#if (defined(_MSC_VER) && defined(_WIN64)) || (defined(__GNUC__) && defined (__x86_64__))
++#if ((defined(_MSC_VER) && defined(_WIN64)) || (defined(__GNUC__) && defined (__x86_64__))) && !defined(__arm64ec__)
+ #  define VORBIS_FPU_CONTROL
+ 
+ typedef ogg_int16_t vorbis_fpu_control;
 diff --git a/media/libvpx/vp8_rtcd.h b/media/libvpx/vp8_rtcd.h
-index faaf2ab18..304d9a6a6 100644
+index faaf2ab18..d9a389480 100644
 --- a/media/libvpx/vp8_rtcd.h
 +++ b/media/libvpx/vp8_rtcd.h
 @@ -6,7 +6,7 @@
@@ -251,7 +341,7 @@ index faaf2ab18..304d9a6a6 100644
   */
  
 -#if defined(_WIN64)
-+#if defined(_WIN64) && !defined(__aarch64__)
++#if defined(_WIN64) && !defined(__aarch64__) && !defined(__arm64ec__)
  /* 64 bit Windows */
  #ifdef _MSC_VER
  #include "vp8_rtcd_x86_64-win64-vs12.h"
@@ -260,12 +350,21 @@ index faaf2ab18..304d9a6a6 100644
  #endif
  
 -#elif defined(_WIN32)
-+#elif defined(_WIN32) && !defined(__aarch64__)
++#elif defined(_WIN32) && !defined(__aarch64__) && !defined(__arm64ec__)
  /* 32 bit Windows, MSVC. */
  #ifdef _MSC_VER
  #include "vp8_rtcd_x86-win32-vs12.h"
+@@ -34,7 +34,7 @@
+ /* 32 bit ELF platforms. */
+ #include "vp8_rtcd_x86-linux-gcc.h"
+ 
+-#elif defined(__ELF__) && (defined(__x86_64) || defined(__x86_64__))
++#elif defined(__ELF__) && (defined(__x86_64) || defined(__x86_64__)) && !defined(__arm64ec__) && !defined(__arm64ec__)
+ /* 64 bit ELF platforms. */
+ #include "vp8_rtcd_x86_64-linux-gcc.h"
+ 
 diff --git a/media/libvpx/vp9_rtcd.h b/media/libvpx/vp9_rtcd.h
-index f3ec15b63..80bc96f29 100644
+index f3ec15b63..993e85430 100644
 --- a/media/libvpx/vp9_rtcd.h
 +++ b/media/libvpx/vp9_rtcd.h
 @@ -6,7 +6,7 @@
@@ -273,7 +372,7 @@ index f3ec15b63..80bc96f29 100644
   */
  
 -#if defined(_WIN64)
-+#if defined(_WIN64) && !defined(__aarch64__)
++#if defined(_WIN64) && !defined(__aarch64__) && !defined(__arm64ec__)
  /* 64 bit Windows */
  #ifdef _MSC_VER
  #include "vp9_rtcd_x86_64-win64-vs12.h"
@@ -282,12 +381,21 @@ index f3ec15b63..80bc96f29 100644
  #endif
  
 -#elif defined(_WIN32)
-+#elif defined(_WIN32) && !defined(__aarch64__)
++#elif defined(_WIN32) && !defined(__aarch64__) && !defined(__arm64ec__)
  /* 32 bit Windows, MSVC. */
  #ifdef _MSC_VER
  #include "vp9_rtcd_x86-win32-vs12.h"
+@@ -34,7 +34,7 @@
+ /* 32 bit ELF platforms. */
+ #include "vp9_rtcd_x86-linux-gcc.h"
+ 
+-#elif defined(__ELF__) && (defined(__x86_64) || defined(__x86_64__))
++#elif defined(__ELF__) && (defined(__x86_64) || defined(__x86_64__)) && !defined(__arm64ec__) && !defined(__arm64ec__)
+ /* 64 bit ELF platforms. */
+ #include "vp9_rtcd_x86_64-linux-gcc.h"
+ 
 diff --git a/media/libvpx/vpx_dsp_rtcd.h b/media/libvpx/vpx_dsp_rtcd.h
-index 616fe5f3d..8440d55e4 100644
+index 616fe5f3d..8fe7002b8 100644
 --- a/media/libvpx/vpx_dsp_rtcd.h
 +++ b/media/libvpx/vpx_dsp_rtcd.h
 @@ -6,7 +6,7 @@
@@ -295,7 +403,7 @@ index 616fe5f3d..8440d55e4 100644
   */
  
 -#if defined(_WIN64)
-+#if defined(_WIN64) && !defined(__aarch64__)
++#if defined(_WIN64) && !defined(__aarch64__) && !defined(__arm64ec__)
  /* 64 bit Windows */
  #ifdef _MSC_VER
  #include "vpx_dsp_rtcd_x86_64-win64-vs12.h"
@@ -304,12 +412,21 @@ index 616fe5f3d..8440d55e4 100644
  #endif
  
 -#elif defined(_WIN32)
-+#elif defined(_WIN32) && !defined(__aarch64__)
++#elif defined(_WIN32) && !defined(__aarch64__) && !defined(__arm64ec__)
  /* 32 bit Windows, MSVC. */
  #ifdef _MSC_VER
  #include "vpx_dsp_rtcd_x86-win32-vs12.h"
+@@ -34,7 +34,7 @@
+ /* 32 bit ELF platforms. */
+ #include "vpx_dsp_rtcd_x86-linux-gcc.h"
+ 
+-#elif defined(__ELF__) && (defined(__x86_64) || defined(__x86_64__))
++#elif defined(__ELF__) && (defined(__x86_64) || defined(__x86_64__)) && !defined(__arm64ec__) && !defined(__arm64ec__)
+ /* 64 bit ELF platforms. */
+ #include "vpx_dsp_rtcd_x86_64-linux-gcc.h"
+ 
 diff --git a/media/libvpx/vpx_scale_rtcd.h b/media/libvpx/vpx_scale_rtcd.h
-index 45b6a6490..65c7e3aee 100644
+index 45b6a6490..956d59b87 100644
 --- a/media/libvpx/vpx_scale_rtcd.h
 +++ b/media/libvpx/vpx_scale_rtcd.h
 @@ -6,7 +6,7 @@
@@ -317,7 +434,7 @@ index 45b6a6490..65c7e3aee 100644
   */
  
 -#if defined(_WIN64)
-+#if defined(_WIN64) && !defined(__aarch64__)
++#if defined(_WIN64) && !defined(__aarch64__) && !defined(__arm64ec__)
  /* 64 bit Windows */
  #ifdef _MSC_VER
  #include "vpx_scale_rtcd_x86_64-win64-vs12.h"
@@ -326,10 +443,47 @@ index 45b6a6490..65c7e3aee 100644
  #endif
  
 -#elif defined(_WIN32)
-+#elif defined(_WIN32) && !defined(__aarch64__)
++#elif defined(_WIN32) && !defined(__aarch64__) && !defined(__arm64ec__)
  /* 32 bit Windows, MSVC. */
  #ifdef _MSC_VER
  #include "vpx_scale_rtcd_x86-win32-vs12.h"
+@@ -34,7 +34,7 @@
+ /* 32 bit ELF platforms. */
+ #include "vpx_scale_rtcd_x86-linux-gcc.h"
+ 
+-#elif defined(__ELF__) && (defined(__x86_64) || defined(__x86_64__))
++#elif defined(__ELF__) && (defined(__x86_64) || defined(__x86_64__)) && !defined(__arm64ec__) && !defined(__arm64ec__)
+ /* 64 bit ELF platforms. */
+ #include "vpx_scale_rtcd_x86_64-linux-gcc.h"
+ 
+diff --git a/media/libyuv/include/libyuv/basic_types.h b/media/libyuv/include/libyuv/basic_types.h
+index 4b5e4b619..7a09a1293 100644
+--- a/media/libyuv/include/libyuv/basic_types.h
++++ b/media/libyuv/include/libyuv/basic_types.h
+@@ -11,6 +11,10 @@
+ #ifndef INCLUDE_LIBYUV_BASIC_TYPES_H_  // NOLINT
+ #define INCLUDE_LIBYUV_BASIC_TYPES_H_
+ 
++#if defined(__arm64ec__) && !defined(LIBYUV_DISABLE_X86)
++#define LIBYUV_DISABLE_X86
++#endif
++
+ #include <stddef.h>  // for NULL, size_t
+ 
+ #if !(defined(_MSC_VER) && (_MSC_VER < 1600))
+diff --git a/media/libyuv/source/cpu_id.cc b/media/libyuv/source/cpu_id.cc
+index ea2f6906f..d6089e5fd 100644
+--- a/media/libyuv/source/cpu_id.cc
++++ b/media/libyuv/source/cpu_id.cc
+@@ -43,7 +43,7 @@ extern "C" {
+ #endif
+ 
+ // Low level cpuid for X86. Returns zeros on other CPUs.
+-#if !defined(__pnacl__) && !defined(__CLR_VER) && \
++#if !defined(__pnacl__) && !defined(__CLR_VER) && !defined(__arm64ec__) && \
+     (defined(_M_IX86) || defined(_M_X64) || \
+     defined(__i386__) || defined(__x86_64__))
+ LIBYUV_API
 diff --git a/mfbt/Endian.h b/mfbt/Endian.h
 index 3a7932e74..3201fb8a8 100644
 --- a/mfbt/Endian.h
@@ -344,14 +498,14 @@ index 3a7932e74..3201fb8a8 100644
  #  else
  #    error "CPU type is unknown"
 diff --git a/mozglue/misc/TimeStamp_windows.cpp b/mozglue/misc/TimeStamp_windows.cpp
-index f6cd01c71..ec79bc82c 100644
+index f6cd01c71..a1f262d4f 100644
 --- a/mozglue/misc/TimeStamp_windows.cpp
 +++ b/mozglue/misc/TimeStamp_windows.cpp
 @@ -441,6 +441,9 @@ BaseTimeDurationPlatformUtils::ResolutionInTicks()
  static bool
  HasStableTSC()
  {
-+#if defined(_M_ARM64) || defined(__aarch64__)
++#if defined(_M_ARM64) || defined(__aarch64__) || defined(__arm64ec__)
 +  return true;
 +#else
    union
@@ -366,7 +520,7 @@ index f6cd01c71..ec79bc82c 100644
  
  MFBT_API void
 diff --git a/nsprpub/pr/include/md/_win95.cfg b/nsprpub/pr/include/md/_win95.cfg
-index 1e693cc68..12e40eda2 100644
+index 1e693cc68..e3818376a 100644
 --- a/nsprpub/pr/include/md/_win95.cfg
 +++ b/nsprpub/pr/include/md/_win95.cfg
 @@ -68,7 +68,7 @@
@@ -374,15 +528,23 @@ index 1e693cc68..12e40eda2 100644
  #define PR_BYTES_PER_DWORD_LOG2	3
  
 -#elif defined(_M_X64) || defined(_M_AMD64) || defined(_AMD64_)
-+#elif defined(_M_X64) || defined(_M_AMD64) || defined(_AMD64_) || defined(_M_ARM64) || defined(_ARM64_) || defined(__aarch64__)
++#elif defined(_M_X64) || defined(_M_AMD64) || defined(_AMD64_) || defined(__x86_64__) || defined(_M_ARM64) || defined(_ARM64_) || defined(__aarch64__)
  
  #define IS_LITTLE_ENDIAN 1
  #undef  IS_BIG_ENDIAN
 diff --git a/nsprpub/pr/include/md/_win95.h b/nsprpub/pr/include/md/_win95.h
-index d65e26437..f2a8c127d 100644
+index d65e26437..c20479bb7 100644
 --- a/nsprpub/pr/include/md/_win95.h
 +++ b/nsprpub/pr/include/md/_win95.h
-@@ -26,6 +26,8 @@
+@@ -20,12 +20,16 @@
+ #define _PR_SI_SYSNAME        "WIN95"
+ #if defined(_M_IX86) || defined(_X86_)
+ #define _PR_SI_ARCHITECTURE   "x86"
++#elif defined(__arm64ec__)
++#define _PR_SI_ARCHITECTURE   "aarch64"
+ #elif defined(_M_X64) || defined(_M_AMD64) || defined(_AMD64_)
+ #define _PR_SI_ARCHITECTURE   "x86-64"
+ #elif defined(_M_IA64) || defined(_IA64_)
  #define _PR_SI_ARCHITECTURE   "ia64"
  #elif defined(_M_ARM) || defined(_ARM_)
  #define _PR_SI_ARCHITECTURE   "arm"
@@ -420,6 +582,70 @@ index 8c747dc32..d9a348631 100644
  esac
  
  MOZ_ARG_ENABLE_BOOL(require-all-d3dc-versions,
+diff --git a/security/nss/lib/freebl/mpi/mpcpucache.c b/security/nss/lib/freebl/mpi/mpcpucache.c
+index 925006110..9e1fae328 100644
+--- a/security/nss/lib/freebl/mpi/mpcpucache.c
++++ b/security/nss/lib/freebl/mpi/mpcpucache.c
+@@ -21,7 +21,7 @@
+  * 
+  */
+ 
+-#if defined(i386) || defined(__i386) || defined(__X86__) || defined (_M_IX86) || defined(__x86_64__) || defined(__x86_64) || defined(_M_AMD64)
++#if !defined(__arm64ec__) && (defined(i386) || defined(__i386) || defined(__X86__) || defined (_M_IX86) || defined(__x86_64__) || defined(__x86_64) || defined(_M_AMD64))
+ /* X86 processors have special instructions that tell us about the cache */
+ #include "string.h"
+ 
+diff --git a/security/nss/lib/freebl/sha512.c b/security/nss/lib/freebl/sha512.c
+index 28e7c04b5..7b957e794 100644
+--- a/security/nss/lib/freebl/sha512.c
++++ b/security/nss/lib/freebl/sha512.c
+@@ -664,7 +664,7 @@ void SHA224_Clone(SHA224Context *dest, SHA224Context *src)
+ #pragma intrinsic(_byteswap_uint64)
+ #define SHA_HTONLL(x) _byteswap_uint64(x)
+ 
+-#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__x86_64))
++#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__x86_64)) && !defined(__arm64ec__)
+ static __inline__ PRUint64 swap8b(PRUint64 value)
+ {
+     __asm__("bswapq %0" : "+r" (value));
+diff --git a/toolkit/components/protobuf/src/google/protobuf/repeated_field.h b/toolkit/components/protobuf/src/google/protobuf/repeated_field.h
+index 50051831d..12d69bd53 100644
+--- a/toolkit/components/protobuf/src/google/protobuf/repeated_field.h
++++ b/toolkit/components/protobuf/src/google/protobuf/repeated_field.h
+@@ -46,10 +46,8 @@
+ #ifndef GOOGLE_PROTOBUF_REPEATED_FIELD_H__
+ #define GOOGLE_PROTOBUF_REPEATED_FIELD_H__
+ 
+-#ifdef _MSC_VER
+-// This is required for min/max on VS2013 only.
++// std::fill と std::copy に要る (元は MSVC のときだけ読み込んでいた)
+ #include <algorithm>
+-#endif
+ 
+ #include <string>
+ #include <iterator>
+diff --git a/toolkit/components/protobuf/src/google/protobuf/stubs/platform_macros.h b/toolkit/components/protobuf/src/google/protobuf/stubs/platform_macros.h
+index 7956d076d..4e89376cf 100644
+--- a/toolkit/components/protobuf/src/google/protobuf/stubs/platform_macros.h
++++ b/toolkit/components/protobuf/src/google/protobuf/stubs/platform_macros.h
+@@ -40,7 +40,7 @@
+ //   http://msdn.microsoft.com/en-us/library/b0084kay.aspx
+ //   http://www.agner.org/optimize/calling_conventions.pdf
+ //   or with gcc, run: "echo | gcc -E -dM -"
+-#if defined(_M_X64) || defined(__x86_64__)
++#if (defined(_M_X64) || defined(__x86_64__)) && !defined(__arm64ec__)
+ #define GOOGLE_PROTOBUF_ARCH_X64 1
+ #define GOOGLE_PROTOBUF_ARCH_64_BIT 1
+ #elif defined(_M_IX86) || defined(__i386__)
+@@ -52,7 +52,7 @@
+ #elif defined(__ARMEL__)
+ #define GOOGLE_PROTOBUF_ARCH_ARM 1
+ #define GOOGLE_PROTOBUF_ARCH_32_BIT 1
+-#elif defined(__aarch64__)
++#elif defined(__aarch64__) || defined(__arm64ec__)
+ #define GOOGLE_PROTOBUF_ARCH_AARCH64 1
+ #define GOOGLE_PROTOBUF_ARCH_64_BIT 1
+ #elif defined(__MIPSEL__)
 diff --git a/toolkit/library/libxul.mk b/toolkit/library/libxul.mk
 index cfb3c8ba0..0868362a4 100644
 --- a/toolkit/library/libxul.mk
@@ -513,7 +739,7 @@ index eccf0e33d..f7eabcee5 100644
              'xptcinvoke_x86_64.cpp',
 diff --git a/xpcom/reflect/xptcall/md/win32/xptcinvoke_aarch64.cpp b/xpcom/reflect/xptcall/md/win32/xptcinvoke_aarch64.cpp
 new file mode 100644
-index 000000000..1c47d1b50
+index 000000000..3455f6768
 --- /dev/null
 +++ b/xpcom/reflect/xptcall/md/win32/xptcinvoke_aarch64.cpp
 @@ -0,0 +1,136 @@
@@ -526,7 +752,7 @@ index 000000000..1c47d1b50
 +
 +#include "xptcprivate.h"
 +
-+#if !defined(__aarch64__)
++#if !defined(__aarch64__) && !defined(__arm64ec__)
 +#error "This code is for Linux AArch64 only."
 +#endif
 +
@@ -538,7 +764,7 @@ index 000000000..1c47d1b50
 + * http://infocenter.arm.com/help/topic/com.arm.doc.ihi0042d/IHI0042D_aapcs.pdf
 + */
 +
-+#ifndef __AARCH64EL__
++#if !defined(__AARCH64EL__) && !defined(__arm64ec__)
 +#error "Only little endian compatibility was tested"
 +#endif
 +
@@ -655,10 +881,10 @@ index 000000000..1c47d1b50
 +}
 diff --git a/xpcom/reflect/xptcall/md/win32/xptcinvoke_asm_aarch64_gnu.s b/xpcom/reflect/xptcall/md/win32/xptcinvoke_asm_aarch64_gnu.s
 new file mode 100644
-index 000000000..20a6816a0
+index 000000000..6a008e558
 --- /dev/null
 +++ b/xpcom/reflect/xptcall/md/win32/xptcinvoke_asm_aarch64_gnu.s
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,57 @@
 +/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 +/* This Source Code Form is subject to the terms of the Mozilla Public
 + * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -667,11 +893,13 @@ index 000000000..20a6816a0
 +        .text
 +            .globl _NS_InvokeByIndex
 +
++            .globl "#_NS_InvokeByIndex"
 +/*
 + * _NS_InvokeByIndex(nsISupports* that, uint32_t methodIndex,
 + *                   uint32_t paramCount, nsXPTCVariant* params)
 + */
 +
++"#_NS_InvokeByIndex":
 +_NS_InvokeByIndex:
 +            stp         x29, x30, [sp,#-32]!
 +            mov         x29, sp
@@ -716,10 +944,10 @@ index 000000000..20a6816a0
 +
 diff --git a/xpcom/reflect/xptcall/md/win32/xptcstubs_aarch64.cpp b/xpcom/reflect/xptcall/md/win32/xptcstubs_aarch64.cpp
 new file mode 100644
-index 000000000..15b20a95e
+index 000000000..f769a1a04
 --- /dev/null
 +++ b/xpcom/reflect/xptcall/md/win32/xptcstubs_aarch64.cpp
-@@ -0,0 +1,213 @@
+@@ -0,0 +1,219 @@
 +/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 +/* This Source Code Form is subject to the terms of the Mozilla Public
 + * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -728,7 +956,7 @@ index 000000000..15b20a95e
 +#include "xptcprivate.h"
 +#include "xptiprivate.h"
 +
-+#ifndef __AARCH64EL__
++#if !defined(__AARCH64EL__) && !defined(__arm64ec__)
 +#error "Only little endian compatibility was tested"
 +#endif
 +
@@ -911,12 +1139,18 @@ index 000000000..15b20a95e
 +            ".align 2\n\t"                                              \
 +            ".if "#n" < 10 \n\t"                                        \
 +            ".globl  _ZN14nsXPTCStubBase5Stub"#n"Ev \n\t"               \
++            ".globl  \"#_ZN14nsXPTCStubBase5Stub"#n"Ev\" \n\t"         \
++            "\"#_ZN14nsXPTCStubBase5Stub"#n"Ev\": \n\t"                \
 +            "_ZN14nsXPTCStubBase5Stub"#n"Ev: \n\t"                      \
 +            ".elseif "#n" < 100 \n\t"                                   \
 +            ".globl  _ZN14nsXPTCStubBase6Stub"#n"Ev \n\t"               \
++            ".globl  \"#_ZN14nsXPTCStubBase6Stub"#n"Ev\" \n\t"         \
++            "\"#_ZN14nsXPTCStubBase6Stub"#n"Ev\": \n\t"                \
 +            "_ZN14nsXPTCStubBase6Stub"#n"Ev: \n\t"                      \
 +            ".elseif "#n" < 1000 \n\t"                                  \
 +            ".globl  _ZN14nsXPTCStubBase7Stub"#n"Ev \n\t"               \
++            ".globl  \"#_ZN14nsXPTCStubBase7Stub"#n"Ev\" \n\t"         \
++            "\"#_ZN14nsXPTCStubBase7Stub"#n"Ev\": \n\t"                \
 +            "_ZN14nsXPTCStubBase7Stub"#n"Ev: \n\t"                      \
 +            ".else  \n\t"                                               \
 +            ".err   \"stub number "#n" >= 1000 not yet supported\"\n"   \
@@ -935,16 +1169,18 @@ index 000000000..15b20a95e
 +#include "xptcstubsdef.inc"
 diff --git a/xpcom/reflect/xptcall/md/win32/xptcstubs_asm_aarch64_gnu.s b/xpcom/reflect/xptcall/md/win32/xptcstubs_asm_aarch64_gnu.s
 new file mode 100644
-index 000000000..31fcf6270
+index 000000000..4aac56797
 --- /dev/null
 +++ b/xpcom/reflect/xptcall/md/win32/xptcstubs_asm_aarch64_gnu.s
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,34 @@
 +
 +            .set NGPREGS,8
 +            .set NFPREGS,8
 +
 +        .text
 +            .globl SharedStub
++            .globl "#SharedStub"
++"#SharedStub":
 +SharedStub:
 +            stp         x29, x30, [sp,#-16]!
 +            mov         x29, sp
